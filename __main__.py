@@ -1,7 +1,9 @@
 import pulumi
 from pulumi_kubernetes.batch.v1 import Job
 
-vault_addr = "http://vault-0.vault.svc:8200"
+# --- Pulumi config ophalen ---
+config = pulumi.Config("vault")
+vault_addr = config.require("address")  # haalt vault:address op uit Pulumi config
 
 bootstrap_job = Job(
     "vault-bootstrap",
@@ -46,3 +48,4 @@ cat /tmp/init.json
         }
     }
 )
+
