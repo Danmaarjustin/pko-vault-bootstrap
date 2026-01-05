@@ -45,20 +45,28 @@ while true; do
   sleep 2
 done
 
-echo "Initializing Vault on vault-0"
-vault operator init \
-  -key-shares=5 \
-  -key-threshold=3 \
-  -format=json > /tmp/init.json
+echo "Checking Vault initialization..."
+STATUS=$(vault status -format=json)
+if echo "$STATUS" | jq -e '.initialized == true' >/dev/null; then
+  echo "Vault already initialized, skipping init"
+else
+  echo "Initializing Vault on vault-0"
+  vault operator init -key-shares=5 -key-threshold=3 -format=json > /tmp/init.json
+fi
 
-UNSEAL_KEYS=$(jq -r '.unseal_keys_b64[0:3][]' /tmp/init.json)
-
-for i in 0 1 2; do
-  POD_ADDR="http://vault-$i.vault-internal.vault.svc.cluster.local:8200"
-  for key in $UNSEAL_KEYS; do
-    VAULT_ADDR="$POD_ADDR" vault operator unseal "$key"
+# Unseal en raft join
+if [ ! -f /tmp/init.json ]; then
+  echo "Using existing unseal keys (not shown for security)"
+  # hier kun je eventueel de unseal keys uit een Secret halen
+else
+  UNSEAL_KEYS=$(jq -r '.unseal_keys_b64[0:3][]' /tmp/init.json)
+  for i in 0 1 2; do
+    POD_ADDR="http://vault-$i.vault-internal.vault.svc.cluster.local:8200"
+    for key in $UNSEAL_KEYS; do
+      VAULT_ADDR="$POD_ADDR" vault operator unseal "$key"
+    done
   done
-done
+fi
 
 echo "Joining raft followers"
 VAULT_ADDR="http://vault-1.vault-internal.vault.svc.cluster.local:8200" \
