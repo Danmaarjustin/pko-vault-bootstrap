@@ -27,16 +27,21 @@ export VAULT_ADDR="$LEADER_ADDR"
 
 apk add --no-cache jq curl >/dev/null
 
-echo "Waiting for Vault leader API at $VAULT_ADDR..."
-until curl -fsS "$VAULT_ADDR/v1/sys/health?standbyok=true&sealedcode=200&uninitcode=200"; do
+# Wacht tot Vault API reageert
+until curl -fsS "$VAULT_ADDR/v1/sys/health?standbyok=true&sealedcode=200&uninitcode=200" >/dev/null; do
   echo "Vault not ready yet, retrying..."
   sleep 2
 done
+
 echo "Vault leader API is up!"
 
-STATUS=$(vault status -format=json)
-echo "Vault initialized?"
+# Wacht tot Vault status geen error geeft
+until STATUS=$(vault status -format=json 2>/dev/null); do
+  echo "Vault CLI not ready yet, retrying..."
+  sleep 2
+done
 
+echo "Vault initialized?"
 if echo "$STATUS" | jq -e '.initialized == true' >/dev/null; then
   echo "Vault already initialized"
   exit 0
