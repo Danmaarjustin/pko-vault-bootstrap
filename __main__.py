@@ -28,7 +28,9 @@ export VAULT_ADDR="$LEADER_ADDR"
 apk add --no-cache jq curl >/dev/null
 
 echo "Waiting for Vault leader API..."
-until curl -sf "$VAULT_ADDR/v1/sys/health" >/dev/null; do
+until curl -sf \
+  "$VAULT_ADDR/v1/sys/health?standbyok=true&sealedcode=200&uninitcode=200" \
+  >/dev/null; do
   sleep 2
 done
 
