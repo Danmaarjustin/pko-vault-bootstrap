@@ -27,15 +27,16 @@ export VAULT_ADDR="$LEADER_ADDR"
 
 apk add --no-cache jq curl >/dev/null
 
-echo "$VAULT_ADDR is het vault address..."
 echo "Waiting for Vault leader API..."
 until curl -sf "$VAULT_ADDR/v1/sys/health?standbyok=true&sealedcode=200&uninitcode=200" >/dev/null; do
   echo "Waiting for Vault leader API..."
   sleep 2
 done
 
+echo "Done with checking leader API..."
 
 STATUS=$(vault status -format=json)
+echo "Vault initialized?"
 
 if echo "$STATUS" | jq -e '.initialized == true' >/dev/null; then
   echo "Vault already initialized"
