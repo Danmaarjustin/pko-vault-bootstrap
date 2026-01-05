@@ -26,11 +26,11 @@ export VAULT_ADDR={vault_addr}
 apk add --no-cache jq curl >/dev/null
 
 echo "Waiting for Vault API..."
-until curl -sf ${VAULT_ADDR}/v1/sys/health >/dev/null; do
+until curl -sf {vault_addr}/v1/sys/health >/dev/null; do
   sleep 5
 done
 
-if curl -sf ${VAULT_ADDR}/v1/sys/init | jq -e '.initialized == true' >/dev/null; then
+if curl -sf {vault_addr}/v1/sys/init | jq -e '.initialized == true' >/dev/null; then
   echo "Vault already initialized"
   exit 0
 fi
