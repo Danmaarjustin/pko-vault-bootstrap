@@ -29,11 +29,11 @@ apk add --no-cache jq curl >/dev/null
 
 echo "$VAULT_ADDR is het vault address..."
 echo "Waiting for Vault leader API..."
-until curl -sf \
-  "$VAULT_ADDR/v1/sys/health?standbyok=true&sealedcode=200&uninitcode=200" \
-  >/dev/null; do
+until curl -sf "$VAULT_ADDR/v1/sys/health?standbyok=true&sealedcode=200&uninitcode=200" >/dev/null; do
+  echo "Waiting for Vault leader API..."
   sleep 2
 done
+
 
 STATUS=$(vault status -format=json)
 
