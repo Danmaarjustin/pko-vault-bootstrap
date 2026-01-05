@@ -20,12 +20,17 @@ bootstrap_job = Job(
                     "image": "hashicorp/vault:1.15",
                     "command": ["/bin/sh", "-c"],
                     "args": [f"""
-set -e
+set -euo pipefail
 export VAULT_ADDR={vault_addr}
 
 apk add --no-cache jq curl >/dev/null
 
-if vault status -format=json | jq -e '.initialized == true'; then
+echo "Waiting for Vault API..."
+until curl -sf ${VAULT_ADDR}/v1/sys/health >/dev/null; do
+  sleep 5
+done
+
+if curl -sf ${VAULT_ADDR}/v1/sys/init | jq -e '.initialized == true' >/dev/null; then
   echo "Vault already initialized"
   exit 0
 fi
