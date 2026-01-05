@@ -16,9 +16,8 @@ bootstrap_job = Job(
                     "name": "bootstrap",
                     "image": "hashicorp/vault:1.15",
                     "command": ["/bin/sh", "-c"],
-                    "args": [f"""
+                    "args": ["""
 set -euo pipefail
-
 LEADER_ADDR="http://vault-0.vault-internal.vault.svc.cluster.local:8200"
 export VAULT_ADDR="$LEADER_ADDR"
 
@@ -33,7 +32,7 @@ echo "Vault leader API is up!"
 
 # Wacht tot Vault status geen error geeft
 while true; do
-  HEALTH=$(curl -fsS "$VAULT_ADDR/v1/sys/health?standbyok=true&sealedcode=200&uninitcode=200" 2>/dev/null || echo '{{}}')
+  HEALTH=$(curl -fsS "$VAULT_ADDR/v1/sys/health?standbyok=true&sealedcode=200&uninitcode=200" 2>/dev/null || echo '{}')
   if echo "$HEALTH" | jq -e '.initialized != null' >/dev/null 2>&1; then
     break
   fi
@@ -60,7 +59,7 @@ fi
 
 # Unseal alle nodes
 UNSEAL_KEYS=$(jq -r '.unseal_keys_b64[0:3][]' /tmp/init.json)
-for i in $(seq 0 $((pod_count-1))); do
+for i in 0 1 2; do
   POD_ADDR="http://vault-$i.vault-internal.vault.svc.cluster.local:8200"
   for key in $UNSEAL_KEYS; do
     echo "Unsealing $POD_ADDR"
@@ -69,7 +68,7 @@ for i in $(seq 0 $((pod_count-1))); do
 done
 
 # Join raft followers
-for i in $(seq 1 $((pod_count-1))); do
+for i in 1 2; do
   POD_ADDR="http://vault-$i.vault-internal.vault.svc.cluster.local:8200"
   echo "Joining $POD_ADDR to leader $LEADER_ADDR"
   VAULT_ADDR="$POD_ADDR" vault operator raft join "$LEADER_ADDR" || true
