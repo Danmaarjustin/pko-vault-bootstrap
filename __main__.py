@@ -21,29 +21,47 @@ bootstrap_job = Job(
                     "command": ["/bin/sh", "-c"],
                     "args": [f"""
 set -euo pipefail
-export VAULT_ADDR={vault_addr}
+
+LEADER_ADDR="http://vault-0.vault-internal.vault.svc.cluster.local:8200"
+export VAULT_ADDR="$LEADER_ADDR"
 
 apk add --no-cache jq curl >/dev/null
 
-if curl -sf {vault_addr}/v1/sys/init | jq -e '.initialized == true' >/dev/null; then
+echo "Waiting for Vault leader API..."
+until curl -sf "$VAULT_ADDR/v1/sys/health" >/dev/null; do
+  sleep 2
+done
+
+STATUS=$(vault status -format=json)
+
+if echo "$STATUS" | jq -e '.initialized == true' >/dev/null; then
   echo "Vault already initialized"
   exit 0
 fi
 
-echo "Initializing Vault"
-vault operator init -key-shares=5 -key-threshold=3 -format=json > /tmp/init.json
+echo "Initializing Vault on vault-0"
+vault operator init \
+  -key-shares=5 \
+  -key-threshold=3 \
+  -format=json > /tmp/init.json
 
-echo "Unsealing all pods"
-for i in $(seq 0 {pod_count_minus_one}); do
-  for key in $(jq -r '.unseal_keys_b64[0:3][]' /tmp/init.json); do
-    VAULT_ADDR=http://vault-$i.vault.svc:8200 vault operator unseal "$key"
+UNSEAL_KEYS=$(jq -r '.unseal_keys_b64[0:3][]' /tmp/init.json)
+
+for i in 0 1 2; do
+  POD_ADDR="http://vault-$i.vault-internal.vault.svc.cluster.local:8200"
+  for key in $UNSEAL_KEYS; do
+    VAULT_ADDR="$POD_ADDR" vault operator unseal "$key"
   done
 done
 
 echo "Joining raft followers"
-VAULT_ADDR=http://vault-1.vault.svc:8200 vault operator raft join {vault_addr}
-VAULT_ADDR=http://vault-2.vault.svc:8200 vault operator raft join {vault_addr}
+VAULT_ADDR="http://vault-1.vault-internal.vault.svc.cluster.local:8200" \
+  vault operator raft join "$LEADER_ADDR"
 
+VAULT_ADDR="http://vault-2.vault-internal.vault.svc.cluster.local:8200" \
+  vault operator raft join "$LEADER_ADDR"
+
+echo "Bootstrap complete"
 cat /tmp/init.json
 """]
                 }]
