@@ -27,6 +27,10 @@ apk add --no-cache jq curl >/dev/null
 echo "Initializing Vault..."
 vault operator init -key-shares=5 -key-threshold=3 -format=json > /tmp/init.json || true
 
+
+echo "Waiting 5 secondes for leader stabilize..."
+sleep 5
+
 echo "Unsealing Vault pods..."
 UNSEAL_KEYS=$(jq -r '.unseal_keys_b64[0:3][]' /tmp/init.json)
 for i in 0 1 2; do
