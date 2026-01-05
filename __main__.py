@@ -37,7 +37,7 @@ echo "Vault leader API is up!"
 
 # Wacht tot Vault status geen error geeft
 while true; do
-  HEALTH=$(curl -fsS "$VAULT_ADDR/v1/sys/health?standbyok=true&sealedcode=200&uninitcode=200" 2>/dev/null || echo '{}')
+  HEALTH=$(curl -fsS "$VAULT_ADDR/v1/sys/health?standbyok=true&sealedcode=200&uninitcode=200" 2>/dev/null || echo '{{}}')
   if echo "$HEALTH" | jq -e '.initialized != null' >/dev/null 2>&1; then
     break
   fi
