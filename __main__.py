@@ -36,16 +36,14 @@ done
 echo "Vault leader API is up!"
 
 # Wacht tot Vault status geen error geeft
-until STATUS=$(vault status -format=json 2>/dev/null); do
-  echo "Vault CLI not ready yet, retrying..."
+while true; do
+  HEALTH=$(curl -fsS "$VAULT_ADDR/v1/sys/health?standbyok=true&sealedcode=200&uninitcode=200" 2>/dev/null || echo '{}')
+  if echo "$HEALTH" | jq -e '.initialized != null' >/dev/null 2>&1; then
+    break
+  fi
+  echo "Vault leader API not ready yet..."
   sleep 2
 done
-
-echo "Vault initialized?"
-if echo "$STATUS" | jq -e '.initialized == true' >/dev/null; then
-  echo "Vault already initialized"
-  exit 0
-fi
 
 echo "Initializing Vault on vault-0"
 vault operator init \
