@@ -1,13 +1,10 @@
 import pulumi
 from pulumi_kubernetes.batch.v1 import Job
 
-# --- Pulumi config ---
 config = pulumi.Config("vault")
 vault_addr = config.require("address")
 pod_count = config.get_int("pod_count") or 3
-pod_count_minus_one = pod_count - 1
 
-# --- Job ---
 bootstrap_job = Job(
     "vault-bootstrap",
     spec={
@@ -32,7 +29,6 @@ until curl -fsS "$VAULT_ADDR/v1/sys/health?standbyok=true&sealedcode=200&uninitc
   echo "Vault not ready yet, retrying..."
   sleep 2
 done
-
 echo "Vault leader API is up!"
 
 # Wacht tot Vault status geen error geeft
@@ -52,34 +48,39 @@ if echo "$STATUS" | jq -e '.initialized == true' >/dev/null; then
 else
   echo "Initializing Vault on vault-0"
   vault operator init -key-shares=5 -key-threshold=3 -format=json > /tmp/init.json
+  echo "Storing keys in Kubernetes Secret..."
+  kubectl create secret generic vault-init -n pulumi-kubernetes-operator --from-file=/tmp/init.json || true
 fi
 
-# Unseal en raft join
+# Haal unseal keys uit Secret als init.json ontbreekt
 if [ ! -f /tmp/init.json ]; then
-  echo "Using existing unseal keys (not shown for security)"
-  # hier kun je eventueel de unseal keys uit een Secret halen
-else
-  UNSEAL_KEYS=$(jq -r '.unseal_keys_b64[0:3][]' /tmp/init.json)
-  for i in 0 1 2; do
-    POD_ADDR="http://vault-$i.vault-internal.vault.svc.cluster.local:8200"
-    for key in $UNSEAL_KEYS; do
-      VAULT_ADDR="$POD_ADDR" vault operator unseal "$key"
-    done
-  done
+  echo "Fetching existing unseal keys from Secret..."
+  kubectl get secret vault-init -n pulumi-kubernetes-operator -o jsonpath='{.data.init\.json}' | base64 -d > /tmp/init.json
 fi
 
-echo "Joining raft followers"
-VAULT_ADDR="http://vault-1.vault-internal.vault.svc.cluster.local:8200" \
-  vault operator raft join "$LEADER_ADDR"
+# Unseal alle nodes
+UNSEAL_KEYS=$(jq -r '.unseal_keys_b64[0:3][]' /tmp/init.json)
+for i in $(seq 0 $((pod_count-1))); do
+  POD_ADDR="http://vault-$i.vault-internal.vault.svc.cluster.local:8200"
+  for key in $UNSEAL_KEYS; do
+    echo "Unsealing $POD_ADDR"
+    VAULT_ADDR="$POD_ADDR" vault operator unseal "$key" || true
+  done
+done
 
-VAULT_ADDR="http://vault-2.vault-internal.vault.svc.cluster.local:8200" \
-  vault operator raft join "$LEADER_ADDR"
+# Join raft followers
+for i in $(seq 1 $((pod_count-1))); do
+  POD_ADDR="http://vault-$i.vault-internal.vault.svc.cluster.local:8200"
+  echo "Joining $POD_ADDR to leader $LEADER_ADDR"
+  VAULT_ADDR="$POD_ADDR" vault operator raft join "$LEADER_ADDR" || true
+done
 
 echo "Bootstrap complete"
-cat /tmp/init.json
+cat /tmp/init.json || true
 """]
                 }]
             }
         }
     }
 )
+
