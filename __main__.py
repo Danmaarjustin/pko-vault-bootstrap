@@ -27,13 +27,12 @@ export VAULT_ADDR="$LEADER_ADDR"
 
 apk add --no-cache jq curl >/dev/null
 
-echo "Waiting for Vault leader API..."
-until curl -sf "$VAULT_ADDR/v1/sys/health?standbyok=true&sealedcode=200&uninitcode=200" >/dev/null; do
-  echo "Waiting for Vault leader API..."
+echo "Waiting for Vault leader API at $VAULT_ADDR..."
+until curl -fsS "$VAULT_ADDR/v1/sys/health?standbyok=true&sealedcode=200&uninitcode=200"; do
+  echo "Vault not ready yet, retrying..."
   sleep 2
 done
-
-echo "Done with checking leader API..."
+echo "Vault leader API is up!"
 
 STATUS=$(vault status -format=json)
 echo "Vault initialized?"
